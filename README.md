@@ -290,7 +290,7 @@ Sebelum menghilang, dia menyisakan semua petunjuk tentang harta karun tersebut
 melalui tulisan dalam buku catatannya yang tersebar di penjuru dunia. "One Piece
 does exist".
 
-###4a
+### 4a
 ```
 #include<stdio.h>
 #include <sys/ipc.h>
@@ -356,7 +356,7 @@ int main () {
     return 0;
 }
 ```
-###4b
+### 4b
 ```
 #include <pthread.h> 
 #include <stdio.h>
@@ -409,7 +409,7 @@ int main (int argc, char* argv[]) {
   	shmctl(shmid, IPC_RMID, NULL);
 }
 ```
-###4c
+### 4c
 ```
 #include <stdio.h> 
 #include <unistd.h> 

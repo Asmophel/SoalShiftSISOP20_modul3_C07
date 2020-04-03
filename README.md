@@ -356,6 +356,84 @@ int main () {
     return 0;
 }
 ```
+
+Penjelasan
+```
+key_t key = 1234;
+    int *value;
+    int shmid = shmget(key, sizeof(int), IPC_CREAT | 0666);
+    value = shmat(shmid, NULL, 0);
+```
+syntax diatas digunakan untuk shared memory
+
+```
+int matrix1[4][2];
+	int matrix2[2][5];
+	int hsl[10][10];
+	int sum,i,j,k;
+	int r1=4;
+	int c1=2;
+	int r2=2;
+	int c2=5;
+	
+	matrix1[0][0]=1;
+	matrix1[0][1]=2;
+	matrix1[1][0]=2;
+	matrix1[1][1]=2;
+	matrix1[2][0]=1;
+	matrix1[2][1]=2;
+	matrix1[3][0]=1;
+	matrix1[3][1]=1;
+	
+	matrix2[0][0]=2;
+	matrix2[0][1]=2;
+	matrix2[0][2]=2;
+	matrix2[0][3]=1;
+	matrix2[0][4]=1;
+	matrix2[1][0]=2;
+	matrix2[1][1]=1;
+	matrix2[1][2]=2;
+	matrix2[1][3]=1;
+	matrix2[1][4]=2;
+```
+inisialisasi variable dan matriks
+
+```
+for(i=0;i<r1;i++){
+		for(j=0;j<c2;j++){
+			for(k=0;k<c1;k++){
+				sum = sum + matrix1[i][k] * matrix2[k][j];
+			}
+			hsl[i][j] = sum;
+			sum = 0;
+		}
+	}
+```
+looping untuk menghitung perkalian matriks
+
+```
+for(i = 0; i < r1; i++){
+		for (j = 0; j< c2; j++){
+			*value = hsl[i][j];
+			sleep(1);
+			printf("%d ", hsl[i][j]);
+		}
+		printf("\n");
+	}
+```
+looping untuk menaruh data ke shared memory dan untuk print hasil perklaian matriks ke layar
+
+```
+for(i=0; i<20; i++){
+        pthread_join(tid[i], NULL);
+    }
+    
+    shmdt(value);
+  	shmctl(shmid, IPC_RMID, NULL);
+}
+```
+untuk join thread dan shared memory
+
 ### 4b
 ```
 #include <pthread.h> 
@@ -385,8 +463,7 @@ int main (int argc, char* argv[]) {
   	int temp;
     
     pthread_t tid[20];
-    
-
+ 
     for(i=0; i<20; i++){
     	hasil[i]=*value;
     	temp=hasil[i];
@@ -409,6 +486,56 @@ int main (int argc, char* argv[]) {
   	shmctl(shmid, IPC_RMID, NULL);
 }
 ```
+
+Penjelasan
+```
+void *thread(int temp) {
+
+    int i, fact = 0;
+    for (i=temp; i>0; i--) {
+        fact += i;
+    }
+    printf("%d", fact);
+}
+```
+fungsi diatas untuk menghitung plus faktorial
+
+```
+key_t key = 1234;
+  	int *value;
+  	int hasil[20];
+	int i;
+  	int shmid = shmget(key, sizeof(int), IPC_CREAT | 0666);
+  	value = shmat(shmid, NULL, 0);
+  	int temp;
+```
+inisialisasi variabel dan shared memory
+
+```
+for(i=0; i<20; i++){
+    	hasil[i]=*value;
+    	temp=hasil[i];
+    	//printf("ini temp %d\n", temp);
+        pthread_create(&(tid[i]), NULL, &thread, (void*)temp);
+        sleep(1);
+        if(i%5==4 && i>0){
+            printf("\n");
+        }
+        else{
+            printf("\t");
+        }
+    }
+    
+    for(i=0; i<20; i++){
+        pthread_join(tid[i], NULL);
+    }
+    
+    shmdt(value);
+  	shmctl(shmid, IPC_RMID, NULL);
+}
+```
+membuat 20 thread untuk menghitung plus faktorial secara paralel, lalu thread dijoin 
+
 ### 4c
 ```
 #include <stdio.h> 
@@ -454,3 +581,50 @@ int main()
     }  
 }  
 ```
+
+Penjelasan
+```
+int i; 
+	pid_t pp;
+	int p[2];
+	char* msg1[] = {"ls", "/mnt/c/Users/Windows 10/Documents/INFORMATICS/Sisop/Modul3", NULL};; 
+	char* msg2[] = {"wc", "-l", NULL};
+```
+inisialisasi variabel dan pipe
+
+```
+if (pipe(p)==-1) 
+    { 
+        fprintf(stderr, "Pipe Failed" ); 
+        return 1; 
+    } 
+```
+kondisi jika pipe tidak berhasil
+
+```
+p = fork(); 
+  
+    if (pp < 0) 
+    { 
+        fprintf(stderr, "fork Failed" ); 
+        return 1; 
+    } 
+  
+    // Parent process 
+    else if (pp > 0) 
+    { 
+        dup2(p[0], 0);
+		close(p[1]);
+		execvp("wc", msg2);
+    } 
+  
+    // child process 
+    else
+    { 
+        dup2(p[1], 1);
+		close(p[0]);]
+	  	execvp("ls", msg1); 
+    }  
+}  
+```
+pipe difork, lalu parent memproses variabel msg1 dan child memproses variabel msg2

@@ -187,177 +187,372 @@ gagal “Auth Failed”
 terdaftar (username dan password harus terlihat)
 
 ### tapserver
-```
-#include <stdio.h>
-#include <sys/socket.h>
-#include <stdlib.h>
-#include <netinet/in.h>
-#include <string.h>
-#include <unistd.h>
-#define PORT 4444
-
-int main(int argc, char const *argv[]) {
-    int server_fd, new_socket, valread, valread2;
-    struct sockaddr_in address;
-    int opt = 1;
-    int addrlen = sizeof(address);
-  
-    char *msg = "penambahan berhasil", *data;
-      
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-        perror("socket failed");
-        exit(EXIT_FAILURE);
+membuat fungsi untuk mengecek ketika login di cek apakah sudah ada data nya atau belum di daftar registrasi
+```c
+int accountExist(char userpass[]) //fungsi untuk mengecek login apakah sudah ada data registrasinya atau belum
+{
+  FILE *file = fopen("akun.txt", "r");
+  if ( file != NULL )
+  {
+    char line[256];
+    while (fgets(line, sizeof line, file) != NULL)
+    {
+      if (strcmp(line, userpass) == 0)
+      {
+        fclose(file);
+        return 1;
+      }
     }
-      
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
-        perror("setsockopt");
-        exit(EXIT_FAILURE);
-    }
+    fclose(file);
+  }
 
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons( PORT );
-      
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address))<0) {
-        perror("bind failed");
-        exit(EXIT_FAILURE);
-    }
-
-    if (listen(server_fd, 3) < 0) {
-        perror("listen");
-        exit(EXIT_FAILURE);
-    }
-
-    if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0) {
-        perror("accept");
-        exit(EXIT_FAILURE);
-    }
-
-    FILE* file_ptr = fopen("akun.txt", "w");
-    
-    int count = 0;
-    while(1){
-    char buffer[1024] = {0};
-    char buffer2[1024] = {0};
-    char buffer3[1024] = {0};
-
-    valread = read( new_socket , buffer, 1024);
-    // printf("%s\n", buffer);
-    if(strcmp(buffer, "login")==0){
-        valread = read( new_socket , buffer2, 1024);
-        printf("%s\n", buffer2);
-    }
-
-    if(strcmp(buffer, "register")==0){
-        valread = read( new_socket , buffer2, 1024);
-        // printf("%s\n", buffer2);
-
-        valread2 = read( new_socket , buffer3, 1024);
-        // printf("%s\n", buffer3);
-
-        fputs(buffer2, file_ptr);
-        fputs(buffer3, file_ptr);
-
-        fclose(file_ptr);
-    }
-    }
-    return 0;
+  return 0;
 }
 ```
+membuat fungsi untuk menghandle client
+```c
+void *createServer(void* arg) //fungsi untuk meng handle client client yang ada
+{
+  int player_id = *(int*)arg;
+
+  int new_socket;
+
+  if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0) {
+    perror("accept");
+    exit(EXIT_FAILURE);
+  }
+  int state_login = -1;
+
+  char buffer[1024] = {0};
+  char new_buffer[1024] = "login";
+  while(1)
+  {
+    char userpass[1024] = {0};
+
+    memset(buffer, 0, sizeof(buffer)); 
+    valread = read(new_socket, buffer, 1024);
+    char value_now[1024];
+
+    if(strcmp(buffer, "login") == 0) //kondisi saat client minta login
+    {
+      send(new_socket, new_buffer, strlen(new_buffer), 0);
+      read(new_socket, buffer, 1024);
+      
+      char login_message[100];
+      if(accountExist(buffer))
+        strcpy(login_message, "Auth success"); //print auth success
+      else
+        strcpy(login_message, "Auth failed"); //print auth failed
+      puts(login_message);
+
+      send(new_socket, login_message, strlen(login_message), 0); 
+      memset(buffer, 0, sizeof(buffer)); 
+      state_login = 1; 
+    }
+    else if(strcmp(buffer, "register") == 0) //kondisi pada saat server minta login
+    {
+      fp = fopen ("akun.txt", "a"); //meng append file akun.txt
+      
+      send(new_socket, buffer, strlen(buffer), 0);
+      memset(buffer, 0, sizeof(buffer)); 
+      
+      read(new_socket, buffer, 1024);
+      fputs(buffer, fp); //masukin data register ke file akun.txt
+      fclose(fp);
+
+      char register_success[100] = "register success"; 
+      send(new_socket, register_success, strlen(register_success), 0); //send register success
+
+      fp = fopen ("akun.txt", "r"); 
+      char c = fgetc(fp); 
+      while (c != EOF) //untuk ngeprint file akun.txt sampai semua
+      { 
+        printf ("%c", c); 
+        c = fgetc(fp); 
+      }
+      fclose(fp);
+
+      state_login = 0;
+    }
+    else if(strcmp(buffer, "find") == 0)
+    {
+      // puts(buffer);
+      int enemy = -1;
+      int waiting = 0;
+      char status[100] = "Waiting for player ...";
+      // puts(status);
+      
+      while((enemy == -1 || enemy == player_id) && matchup[player_id] == -1) //while untuk nunggu apakah sudah ada lawan atau belum
+      {
+        if(isEmpty(queue))
+          enqueue(queue, player_id);
+        else
+          enemy = dequeue(queue);
+
+        if(enemy != player_id && enemy != -1) //kondisi ketika menemukan musuh
+        {
+          matchup[player_id] = enemy; //dicocokkan agar terjadi match up dengan lawan
+          matchup[enemy] = player_id;
+          
+          while(queue->front == player_id || queue->front == enemy)
+            dequeue(queue);
+          break;
+        }
+        else
+        {
+          if(waiting == 0)
+          {
+            send(new_socket, status, sizeof(status), 0);
+            waiting = 1;
+          }
+        }
+        sleep(1);
+      }
+
+      health[player_id] = 100;
+      enemy = matchup[player_id];
+
+      while(health[enemy] != 100); //nunggu lawan ready
+      strcpy(status, "Game dimulai silahkan tap tap secepat mungkin !!");
+      send(new_socket, status, sizeof(status), 0); //ketika lawan ready, maka send game dimulai 
+
+      memset(status, 0, sizeof(status));
+      int current_health = health[player_id];
+      while(health[player_id] && health[enemy]) //loop untuk berjalan nya game
+      {
+        char new_status[1024] = "kosongs";
+        read(new_socket, buffer, 1024);
+
+        if(strcmp(buffer, "hit !!") == 0) //kondisi kalo hit berarti health nya -10
+        {
+          // printf("%d vs %d\n", health[player_id], health[enemy]);
+          health[enemy] -= 10;
+          memset(buffer, 0, sizeof(buffer));
+        }
+        else
+          strcpy(new_status, "kosongs");
+
+        if(health[player_id] != current_health)
+        {
+          current_health = health[player_id]; //ngeupdate nyawa
+          sprintf(new_status, "%d", current_health);
+        }
+
+        send(new_socket, new_status, sizeof(new_status), 0); //kirim update nyawa
+
+      }
+      if (health[player_id]) //kalo nyawanya masih ada berarti menang
+        strcpy(status, "Game berakhir kamu menang");
+      else
+        strcpy(status, "Game berakhir kamu kalah"); //kalo nyawa habis berarti kalah
+      send(new_socket, status, sizeof(status), 0);
+      matchup[player_id] = -1;
+    }
+    else if (strcmp(buffer, "logout") == 0) //kondisi kalau log out
+    {
+      state_login = -1;
+    }
+    else
+    {
+      strcpy(buffer, "invalid command");
+      send(new_socket, buffer, sizeof(buffer), 0);
+      memset(buffer, 0, sizeof(buffer)); 
+    }
+  }
+}
+```
+lalu dalam int main, membuat deklarasi thread of array sebanyak pemain yang bisa bermain. lalu dijalankan thread nya
+```c
+  pthread_t threads[100]; //deklarasi array of thread untuk menghandle banyak pemain
+  for (int i = 0; i < 100; i++)
+  {
+    int *new_val = &i;
+    pthread_create(&threads[i], NULL, createServer,  (void *)new_val); //menjalankan fungsi untuk menghandle pemain
+  }
+  
+  for (int i = 0; i < 100; i++)  
+    pthread_join(threads[i], NULL); 
+
+```
+
 
 ### tapplayer
+membuat fungsi untuk supaya ketika memencet spasi, langsung dianggap sebagai inputan tanpa memencet enter
+```c
+void initTermios(int echo)
+{
+  tcgetattr(0, &old);
+  new = old;
+  new.c_lflag &= ~ICANON;
+  new.c_lflag &= echo ? ECHO : ~ECHO;
+  tcsetattr(0, TCSANOW, &new);
+}
 ```
-#include <stdio.h>
-#include <sys/socket.h>
-#include <stdlib.h>
-#include <netinet/in.h>
-#include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#define PORT 4444
-#define LEN 40
-#define MAX 100
-
-
-int main(int argc, char const *argv[]) {
-    struct sockaddr_in address;
-    int sock = 0, valread;
-    struct sockaddr_in serv_addr;
-    char msg[1024];
-    char *pesan1 = "Auth success";
-    char *pesan2 = "Auth failed";
-    char userr[1024], passs[1024];
-    char listname[100][40];
-    char listpass[100][40];
-    
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        printf("\n Socket creation error \n");
-        return -1;
+membuat fungsi untuk menangkap input sejumlah 1 karakter
+```c
+void *spaceScanner() //thread untuk nangkap inputan sejumlah 1 karakter
+{
+  while(running_game)
+    while(space_scanner)
+    {
+      if (getch() == 32) //kalo getch nya ngereturn spasi
+      {
+        space_pressed = 1; //tanda kalo spasi dipencet
+        space_scanner = 0; 
+      }
     }
-  
-    memset(&serv_addr, '0', sizeof(serv_addr));
-  
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(PORT);
-      
-    if(inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr)<=0) {
-        printf("\nInvalid address/ Address not supported \n");
-        return -1;
-    }
-  
-    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-        printf("\nConnection Failed \n");
-        return -1;
-    }
-
-int count = 0;
-while(1){
-    char username[LEN];
-    char pass[LEN];
+  pthread_exit(0);
+}
+```
+membuat fungsi untuk ketika run game
+```c
+void *runGame()
+{
+  running_game = 1;
+  while(1)
+  {
+    space_scanner = 1; //lagi butuh space scanner
     char buffer[1024] = {0};
-    int i, a;
+    char new_buffer[64] = "kosong";
 
-    scanf("%s", msg);
-    send(sock , msg , sizeof(msg) , 0 );
-
-    printf("scan berhasil\n");
-
-    if(strcmp(msg, "login")==0){
-        printf("Username : ");
-        scanf("%s", username);
-        printf("password : ");
-        scanf("%s", pass);
-    for(i = 0; i< count; i++){
-        if (strcmp(listname[i], username) == 0 && strcmp(listpass[i], pass) == 0)
-        {
-            printf("login success\n");
-            send(sock , pesan1 , strlen(pesan1) , 0 );
-        }
-        else 
-        {
-            printf("login failed\n");
-            send(sock , pesan2 , strlen(pesan2) , 0 );
-        }
-    }
+    if (space_pressed)  //kalo kepencet spasi dia kirim buffer hit ke server
+    {
+      char hit[10] = "hit !!";
+      strcpy(new_buffer, hit);
+      space_pressed = 0; //spasi udah dipencet
     }
 
-    else if(strcmp(msg, "register")==0){ 
-	printf("username : ");
-	scanf("%s", listname[count]);
-    sprintf(userr, "%s\n", listname[count]);
-    send(sock , userr , sizeof(userr) , 0 );
-	printf("password : ");
-	scanf("%s", listpass[count]);
-    sprintf(passs, "%s\n", listpass[count]);
-    send(sock , passs , sizeof(passs) , 0 );
-	count++;
-    printf("register success\n");
+    send(sock, new_buffer, strlen(new_buffer), 0 ); //ngirim buffer apa aja ke server
+    memset(new_buffer, 0, sizeof(new_buffer));
+    valread = read(sock, buffer, 1024);
+    if (strcmp(buffer, "kosongs") != 0 && strcmp(buffer, "Game berakhir kamu kalah") != 0 && strcmp(buffer, "Game berakhir kamu menang") != 0) // kondisi pada saat server ngirim nyawa
+      puts(buffer); //terus di print nyawa nya
+
+    if (strcmp(buffer, "Game berakhir kamu kalah") == 0 || strcmp(buffer, "Game berakhir kamu menang") == 0) //kondisi pada saat ada yang menang dan ada yg kalah
+    {
+      puts(buffer); //terus di print pesan nya
+      screen = 2; //terus kembali ke screen 2 karena permainan sudah selesai
+      break;
     }
-    else printf("input yang anda masukkan salah\n");
+  }
+  space_scanner = 0; // tanda gak perlu lagi nge scan
+  running_game = 0; // tanda game berakhir
+  pthread_exit(0);
 }
-    return 0;
-}
+```
+lalu di dalam while yang ada pada int main, membuat kondisi pada screen 1 yang menghandle ketika login atau register
+```c
+while(1)
+    {
+      if (screen == 1) //awal program berjalan akan masuk ke screen 1
+      {
+        char cmd[100];
+        memset(cmd, 0, sizeof(cmd)); 
+        printf("1. Login\n");
+        printf("2. Register\n");
+        printf("   Choices : ");
+        
+        scanf("%s", cmd);
+        
+        send(sock, cmd , strlen(cmd), 0 );
+        valread = read(sock, buffer, 1024);
 
+        if (strcmp(buffer, "login") == 0 || strcmp(buffer, "register") == 0) // kalo login atau register
+        {
+          char userpass[1024] = {0};
+          char username[128];
+          char password[128];
+          int f;
+          printf("   Username : ");
+          scanf("%d", &f);
+          memset(username, 0, sizeof(username));
+          scanf("%[^\n]", username); //supaya input bisa dianggap sebagai inputan sampai enter
+
+          printf("   Password : ");
+          memset(password, 0, sizeof(password));
+          scanf("%d", &f);
+          scanf("%[^\n]", password);
+
+          sprintf(userpass, "%s - %s\n", username, password);
+          
+          send(sock, userpass, strlen(userpass), 0 );
+          
+          read(sock, buffer, 1024);
+
+          if(strcmp(buffer, "Auth success") == 0) //kondisi pada saat dia berhasil login
+          {
+            printf("   Login success\n");
+            screen = 2; //kalo berhasil login, pindah ke screen 2
+          }
+          else if(strcmp(buffer, "Auth failed") == 0) //kalo dia gagal login
+            printf("   Login failed\n");
+          else 
+            printf("   Register success\n"); //registrasi sukses
+            
+          memset(buffer, 0, sizeof(buffer));
+        }      
+        else
+        {
+          printf("   %s\n", buffer); //ngeprint invalid command yang diterima dari server
+          memset(buffer, 0, sizeof(buffer));
+        }
+
+
+      }
+```
+lalu membuat kondisi screen 2 pada saat dia find match dan logout
+```c
+if (screen == 2) //kondisi masuk ke screen 2
+      {
+        char cmd[100];
+        printf("1. Find Match\n2. Logout\n   Choices : ");
+        scanf("%s", cmd);
+        if (strcmp(cmd, "find") == 0)
+        {
+          send(sock, cmd , strlen(cmd), 0 ); //send find ke server
+      
+          memset(buffer, 0, sizeof(buffer)); 
+          valread = read(sock, buffer, 1024); //read dari server apakah masih nunggu player atau sudah bisa dimulai
+
+          if(strcmp(buffer, "Waiting for player ...") == 0)
+            printf("   %s\n", buffer);
+          
+          while(1)
+          {
+            if(strcmp(buffer, "Game dimulai silahkan tap tap secepat mungkin !!") == 0)
+             break;
+            else
+              read(sock, buffer, 1024); // untuk nerima sampai keluar pesan game sedang dimulai
+          }
+          screen = 3; // masuk ke screen 3 yang artinya mulai main
+        }
+        else if (strcmp(cmd, "logout") == 0) //kondisi kalau logout
+        {
+          send(sock, cmd , strlen(cmd), 0 );
+          screen = 1; //kembali ke screen 
+        }
+        else
+          puts("invalid command"); 
+      }
+```
+lalu saya bikin screen ke 3 yang berguna untuk menjalankan permainkan
+```c
+      if (screen == 3)
+      {
+        printf("   %s\n", buffer);
+        memset(buffer, 0, sizeof(buffer));
+        
+        space_scanner = 1; //ngehidupin space scanner untuk supaya minta spasi
+        pthread_t threads[2]; //deklarasi array of thread
+        pthread_create(&threads[0], NULL, runGame, NULL); //buat thread untuk menjalankan fungsi runGame
+        pthread_create(&threads[1], NULL, spaceScanner, NULL); //buat thread untuk menjalankan fungsi spaseScanner
+
+        pthread_join(threads[0], NULL); //nunggu thread[0] selesai
+        pthread_cancel(threads[1]); // buat matiin thread[1]
+        resetTermios(); 
+        read(sock, buffer, 1024);
+        memset(buffer, 0, sizeof(buffer));
+      }
 ```
 
 ## Soal 3

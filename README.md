@@ -423,6 +423,320 @@ juga menggunakan fork-exec dan system.
 dicoba-coba sendiri untuk kemungkinan test case lainnya yang mungkin
 belum ada di soal3.zip.
 
+### penyelesaian
+Deklarasi terlebih dahulu `pthread_t tid[100]` serta `char wdasal[1024]`
+
+membuat fungsi yang berguna untuk membedakan directory dengan file biasa
+```
+int cekfile(const char *path) {
+    struct stat path_stat;
+    stat(path, &path_stat);
+    return S_ISREG(path_stat.st_mode);
+}
+```
+
+lalu membuat fungsi void untuk perintah -d yang merupakan fungsi untuk memindahkan file dari direktori a ke direktori tempat file dituju
+```
+void* pindahd(void *arg) {
+	char *path;
+	char format[100], dirname[100], a[100], b[100], namafile[100];
+	path = (char *) arg;
+	
+	strcpy(a, arg);
+	strcpy(b, arg);
+	char *split1, *split2, *titik[5], *slash[5];
+	int n = 0;
+	split1 = strtok(path, ".");
+	while(split1 != NULL) {
+		titik[n] = split1;
+		n++;
+		split1 = strtok(NULL, ".");
+	}
+
+	if(n != 1) {
+		int a;
+		for(a = 0; a < strlen(titik[n-1]); a++) {
+			format[a] = tolower(titik[n-1][a]);
+		}
+	}
+	else if (n == 1) {
+		strcpy(format, "Unknown");
+	}
+
+	n = 0;
+	split2 = strtok(b, "/");
+	while(split2 != NULL) {
+		slash[n] = split2;
+		n++;
+		split2 = strtok(NULL, "/");
+	}
+	strcpy(namafile, slash[n-1]);
+
+	strcpy(dirname, wdasal);
+	strcat(dirname, "/");
+	strcat(dirname, format);
+
+	memset(format, 0, 100);
+	mkdir(dirname, 0777);
+
+	FILE *psrc, *ptjn;
+
+	psrc = fopen(a, "r");
+	strcat(dirname, "/");
+	strcat(dirname, namafile);
+	ptjn = fopen(dirname, "w");
+	if(!psrc) {
+		printf("error\n");
+	}
+	if(!ptjn) {
+		printf("error\n");
+	}
+
+	int ch;
+	
+	while ((ch = fgetc(psrc)) != EOF) {
+		fputc(ch, ptjn);
+	}
+
+	fclose(psrc);
+	fclose(ptjn);
+	remove(a);
+
+	return NULL;
+}
+```
+
+untuk mengambil extensi nya, digunakan `strtok` yang biasa digunakan untuk memisahkan string setelah `.`
+```
+	split1 = strtok(path, ".");
+	while(split1 != NULL) {
+		titik[n] = split1;
+		n++;
+		split1 = strtok(NULL, ".");
+	}
+```
+
+karena disoal tidak berlaku case sensitive, yang artinya tidak memperdulikan bahwa huruf kapital dan biasa akan dianggap sama, maka digunakan `tolower` untuk menconvert huruf kapital menjadi huruf kecil.
+```
+	if(n != 1) {
+		int a;
+		for(a = 0; a < strlen(titik[n-1]); a++) {
+			format[a] = tolower(titik[n-1][a]);
+		}
+	}
+```
+
+lalu membuat kondisi ketika ada file yang tidak punya extensi akan dimasukkan ke dalam folder bernama unknown
+```
+	else if (n == 1) {
+		strcpy(format, "Unknown");
+	}
+```
+
+Untuk mendapatkan nama file yang diinginkan menggunakan
+```
+	split2 = strtok(b, "/");
+	while(split2 != NULL) {
+		slash[n] = split2;
+		n++;
+		split2 = strtok(NULL, "/");
+	}
+	strcpy(namafile, slash[n-1]);
+```
+
+Selanjutnya untuk mengambil alamat cwd serta proses untuk memindahkan file dalam bahasa c menggunakan,
+```
+	strcpy(dirname, wdasal);
+	strcat(dirname, "/");
+	strcat(dirname, format);
+
+	memset(format, 0, 100);
+	mkdir(dirname, 0777);
+
+	FILE *psrc, *ptjn;
+	//psrc itu source
+	//ptjn itu tujuan
+	psrc = fopen(a, "r");
+	strcat(dirname, "/");
+	strcat(dirname, namafile);
+	ptjn = fopen(dirname, "w");
+	if(!psrc) {
+		printf("error\n");
+	}
+	if(!ptjn) {
+		printf("error\n");
+	}
+
+	int ch;
+	//memindahkan file di c
+	while ((ch = fgetc(psrc)) != EOF) {
+		fputc(ch, ptjn);
+	}
+	fclose(psrc);		//menutup file yang ditunjuk pointer psrc
+	fclose(ptjn);		//menutup file yang ditunjuk pointer ptjn
+	remove(a);
+```
+
+Sedangkan untuk fungsi `pindah` disini untuk mengecek serta memindahkan file digunakan untuk perintah -f dan *
+```
+void* pindah(void *arg) {
+	char *path;
+	char format[100], dirname[100], a[100], b[100], namafile[100];
+	
+	path = (char *) arg;
+	strcpy(a, arg);
+	strcpy(b, arg);
+	
+	char *split1, *split2, *titik[5], *slash[5];
+	int n = 0;
+
+	split1 = strtok(path, ".");
+	while(split1 != NULL) {
+		titik[n] = split1;
+		n++;
+		split1 = strtok(NULL, ".");
+	}
+    
+	if(n != 1) {
+		int a;
+		for(a = 0; a < strlen(titik[n-1]); a++) {
+		    format[a] = tolower(titik[n-1][a]);
+	    }
+	}
+	else if (n == 1) {
+		strcpy(format, "Unknown");
+	}
+
+	n = 0;
+	split2 = strtok(b, "/");
+	while(split2 != NULL) {
+		slash[n] = split2;
+		n++;
+		split2 = strtok(NULL, "/");
+	}
+	strcpy(namafile, slash[n-1]);
+
+	char wdtujuan[1024];
+	getcwd(wdtujuan, sizeof(wdtujuan));
+	strcpy(dirname, wdtujuan);
+	strcat(dirname, "/");
+	strcat(dirname, format);
+
+	memset(format, 0, 100);
+	mkdir(dirname, 0777);
+
+	FILE *psrc, *ptjn;
+
+	psrc = fopen(a, "r");
+	strcat(dirname, "/");
+	strcat(dirname, namafile);
+	ptjn = fopen(dirname, "w");
+
+	if(!psrc) {
+		printf("error\n");
+	}
+	if(!ptjn) {
+		printf("error\n");
+	}
+
+	int ch;
+	while ((ch = fgetc(psrc)) != EOF) {
+		fputc(ch, ptjn);
+	}
+
+	fclose(psrc);
+	fclose(ptjn);
+	remove(a);
+
+	return NULL;
+}
+```
+
+Untuk penjelasan kedua fungsi diatas sama saja strukturnya. Sebenarnya fungsi `pindah` dan `pindahd` bisa digabung, namun karena dua command `-f` dan `\*` itu bekerja di direktori sendiri, sedangkan untuk comman `-d` itu bekerja di beda direktori. Perbedaannya pada fungsi `pindahd` terdapat `char wdasal[1024]` yang dideclare sebagai variabel global, sedangkan pada fungsi `pindah` terdapat `char wdtujuan[1024]` yang dideclare didalam fungsi itu sendiri.
+
+Selanjutnya masuk ke program driver untuk menguji fungsi di atas
+```
+int main(int argc, char *argv[]) {
+
+	getcwd(wdasal, sizeof(wdasal));
+
+	// if(getcwd(wdasal, sizeof(wdasal)) != NULL) {
+	// 	printf("%s\n", wdasal);		//untuk ngeprint directorynya
+	// }
+
+	int i;
+	// jika command yang dimasukkan -f
+	if(strcmp(argv[1], "-f") == 0) {
+		for(i = 2; i < argc; i++) {
+			if(cekfile(argv[i])) {
+				pthread_create(&(tid[i-2]), NULL, pindah, (void *)argv[i]);
+			}
+		}
+		for(i = 0; i < argc - 2; i++) {
+			pthread_join(tid[i], NULL);
+		}
+	}
+	// jika command yang dimasukkan \*
+	else if(strcmp(argv[1], "*") == 0 && argc == 2) {
+		DIR *dr;
+		struct dirent *d;
+		dr = opendir(".");
+
+		if (dr == NULL) {
+			printf("Direktori tidak dapat ditemukan" );
+		}
+		else {
+			i = 0;
+			char workd[1024], subdir[1024];
+			getcwd(workd, sizeof(workd));
+			while((d = readdir(dr)) != NULL){	//mengambil file dan direktori sampai tidak null
+				if(cekfile(d->d_name)) {	//diseleksi lagi untuk yang diambil nanti hanya file saja
+					strcpy(subdir, workd);
+					strcat(subdir, "/");
+					strcat(subdir, d->d_name);
+					pthread_create(&(tid[i]), NULL, pindah, (void *)subdir); //membuat thread
+					pthread_join(tid[i], NULL);				 //join thread
+					i++;
+				}
+			}
+			closedir(dr);
+		}
+	}
+	// jika command yang dimasukkan -d
+	else if(strcmp(argv[1], "-d") == 0 && argc == 3) {
+		chdir(argv[2]);
+		DIR *dr;
+		struct dirent *d;
+		dr = opendir(".");
+		if (dr == NULL) {
+			printf("Direktori tidak dapat ditemukan" );
+		}
+		else {
+		i = 0;
+			char workd[1024], subdir[1024];
+			getcwd(workd, sizeof(workd));
+			while((d = readdir(dr)) != NULL){
+				if(cekfile(d->d_name)) {
+					strcpy(subdir, workd);
+					strcat(subdir, "/");
+					strcat(subdir, d->d_name);
+					pthread_create(&(tid[i]), NULL, pindahd, (void *)subdir);  //membuat thread
+					pthread_join(tid[i], NULL);				   //join thread
+					i++;
+				}
+			}
+			closedir(dr);
+		}
+	}
+	//jika argumen yang diinputkan tidak sesuai
+	else {
+		printf("argumen yang diinput salah\n");
+	}
+
+	return 0;
+}
+```
+
 ## Soal 4
 ### Soal
 Norland adalah seorang penjelajah terkenal. Pada suatu malam Norland menyusuri

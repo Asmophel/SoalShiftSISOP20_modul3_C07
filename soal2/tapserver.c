@@ -4,72 +4,279 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <unistd.h>
-#define PORT 4444
+#include <pthread.h>
 
-int main(int argc, char const *argv[]) {
-    int server_fd, new_socket, valread, valread2;
-    struct sockaddr_in address;
-    int opt = 1;
-    int addrlen = sizeof(address);
+#define PORT 8080
+
+FILE *fp;
+int server_fd, valread;
+struct sockaddr_in address;
+int opt = 1;
+int addrlen = sizeof(address);
+int player = 0;
+int health[1000];
+struct Queue* queue;
+int matchup[1000];
+
+//bikin queue untuk handle pemain dan permainan supaya bisa teratur main nya 
+struct Queue 
+{ 
+  int front, rear, size; 
+  unsigned capacity; 
+  int* array; 
+};
+
+
+struct Queue* createQueue(unsigned capacity) 
+{ 
+  struct Queue* queue = (struct Queue*) malloc(sizeof(struct Queue)); 
+  queue->capacity = capacity; 
+  queue->front = queue->size = 0;  
+  queue->rear = capacity - 1;
+  queue->array = (int*) malloc(queue->capacity * sizeof(int)); 
+  return queue; 
+} 
   
-    char *msg = "penambahan berhasil", *data;
+int isFull(struct Queue* queue) 
+{  
+  return (queue->size == queue->capacity); 
+} 
+  
+int isEmpty(struct Queue* queue) 
+{  
+  return (queue->size == 0); 
+}
+  
+void enqueue(struct Queue* queue, int item) 
+{ 
+  if (isFull(queue)) 
+    return; 
+  queue->rear = (queue->rear + 1) % queue->capacity; 
+  queue->array[queue->rear] = item; 
+  queue->size = queue->size + 1; 
+} 
+  
+int dequeue(struct Queue* queue) 
+{ 
+  if (isEmpty(queue)) 
+    return -1; 
+  int item = queue->array[queue->front]; 
+  queue->front = (queue->front + 1) % queue->capacity; 
+  queue->size = queue->size - 1; 
+  return item; 
+}
+
+int accountExist(char userpass[]) //fungsi untuk mengecek login apakah sudah ada data registrasinya atau belum
+{
+  FILE *file = fopen("akun.txt", "r");
+  if ( file != NULL )
+  {
+    char line[256];
+    while (fgets(line, sizeof line, file) != NULL)
+    {
+      if (strcmp(line, userpass) == 0)
+      {
+        fclose(file);
+        return 1;
+      }
+    }
+    fclose(file);
+  }
+
+  return 0;
+}
+
+void *createServer(void* arg) //fungsi untuk meng handle client client yang ada
+{
+  int player_id = *(int*)arg;
+
+  int new_socket;
+
+  if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0) {
+    perror("accept");
+    exit(EXIT_FAILURE);
+  }
+  int state_login = -1;
+
+  char buffer[1024] = {0};
+  char new_buffer[1024] = "login";
+  while(1)
+  {
+    char userpass[1024] = {0};
+
+    memset(buffer, 0, sizeof(buffer)); 
+    valread = read(new_socket, buffer, 1024);
+    char value_now[1024];
+
+    if(strcmp(buffer, "login") == 0) //kondisi saat client minta login
+    {
+      send(new_socket, new_buffer, strlen(new_buffer), 0);
+      read(new_socket, buffer, 1024);
       
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-        perror("socket failed");
-        exit(EXIT_FAILURE);
+      char login_message[100];
+      if(accountExist(buffer))
+        strcpy(login_message, "Auth success"); //print auth success
+      else
+        strcpy(login_message, "Auth failed"); //print auth failed
+      puts(login_message);
+
+      send(new_socket, login_message, strlen(login_message), 0); 
+      memset(buffer, 0, sizeof(buffer)); 
+      state_login = 1; 
     }
+    else if(strcmp(buffer, "register") == 0) //kondisi pada saat server minta login
+    {
+      fp = fopen ("akun.txt", "a"); //meng append file akun.txt
       
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
-        perror("setsockopt");
-        exit(EXIT_FAILURE);
-    }
-
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons( PORT );
+      send(new_socket, buffer, strlen(buffer), 0);
+      memset(buffer, 0, sizeof(buffer)); 
       
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address))<0) {
-        perror("bind failed");
-        exit(EXIT_FAILURE);
-    }
+      read(new_socket, buffer, 1024);
+      fputs(buffer, fp); //masukin data register ke file akun.txt
+      fclose(fp);
 
-    if (listen(server_fd, 3) < 0) {
-        perror("listen");
-        exit(EXIT_FAILURE);
-    }
+      char register_success[100] = "register success"; 
+      send(new_socket, register_success, strlen(register_success), 0); //send register success
 
-    if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0) {
-        perror("accept");
-        exit(EXIT_FAILURE);
-    }
+      fp = fopen ("akun.txt", "r"); 
+      char c = fgetc(fp); 
+      while (c != EOF) //untuk ngeprint file akun.txt sampai semua
+      { 
+        printf ("%c", c); 
+        c = fgetc(fp); 
+      }
+      fclose(fp);
 
-    FILE* file_ptr = fopen("akun.txt", "w");
+      state_login = 0;
+    }
+    else if(strcmp(buffer, "find") == 0)
+    {
+      // puts(buffer);
+      int enemy = -1;
+      int waiting = 0;
+      char status[100] = "Waiting for player ...";
+      // puts(status);
+      
+      while((enemy == -1 || enemy == player_id) && matchup[player_id] == -1) //while untuk nunggu apakah sudah ada lawan atau belum
+      {
+        if(isEmpty(queue))
+          enqueue(queue, player_id);
+        else
+          enemy = dequeue(queue);
+
+        if(enemy != player_id && enemy != -1) //kondisi ketika menemukan musuh
+        {
+          matchup[player_id] = enemy; //dicocokkan agar terjadi match up dengan lawan
+          matchup[enemy] = player_id;
+          
+          while(queue->front == player_id || queue->front == enemy)
+            dequeue(queue);
+          break;
+        }
+        else
+        {
+          if(waiting == 0)
+          {
+            send(new_socket, status, sizeof(status), 0);
+            waiting = 1;
+          }
+        }
+        sleep(1);
+      }
+
+      health[player_id] = 100;
+      enemy = matchup[player_id];
+
+      while(health[enemy] != 100); //nunggu lawan ready
+      strcpy(status, "Game dimulai silahkan tap tap secepat mungkin !!");
+      send(new_socket, status, sizeof(status), 0); //ketika lawan ready, maka send game dimulai 
+
+      memset(status, 0, sizeof(status));
+      int current_health = health[player_id];
+      while(health[player_id] && health[enemy]) //loop untuk berjalan nya game
+      {
+        char new_status[1024] = "kosongs";
+        read(new_socket, buffer, 1024);
+
+        if(strcmp(buffer, "hit !!") == 0) //kondisi kalo hit berarti health nya -10
+        {
+          // printf("%d vs %d\n", health[player_id], health[enemy]);
+          health[enemy] -= 10;
+          memset(buffer, 0, sizeof(buffer));
+        }
+        else
+          strcpy(new_status, "kosongs");
+
+        if(health[player_id] != current_health)
+        {
+          current_health = health[player_id]; //ngeupdate nyawa
+          sprintf(new_status, "%d", current_health);
+        }
+
+        send(new_socket, new_status, sizeof(new_status), 0); //kirim update nyawa
+
+      }
+      if (health[player_id]) //kalo nyawanya masih ada berarti menang
+        strcpy(status, "Game berakhir kamu menang");
+      else
+        strcpy(status, "Game berakhir kamu kalah"); //kalo nyawa habis berarti kalah
+      send(new_socket, status, sizeof(status), 0);
+      matchup[player_id] = -1;
+    }
+    else if (strcmp(buffer, "logout") == 0) //kondisi kalau log out
+    {
+      state_login = -1;
+    }
+    else
+    {
+      strcpy(buffer, "invalid command");
+      send(new_socket, buffer, sizeof(buffer), 0);
+      memset(buffer, 0, sizeof(buffer)); 
+    }
+  }
+}
+
+
+int main(int argc, char const *argv[]) 
+{
+  memset(matchup, -1, sizeof(matchup));
+  queue = createQueue(1000); 
+  fp = fopen ("akun.txt", "a"); //bikin file akun.txt
+  fclose(fp);
+
+  if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+    perror("socket failed");
+    exit(EXIT_FAILURE);
+  }
     
-    int count = 0;
-    while(1){
-    char buffer[1024] = {0};
-    char buffer2[1024] = {0};
-    char buffer3[1024] = {0};
+  if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
+    perror("setsockopt");
+    exit(EXIT_FAILURE);
+  }
 
-    valread = read( new_socket , buffer, 1024);
-    // printf("%s\n", buffer);
-    if(strcmp(buffer, "login")==0){
-        valread = read( new_socket , buffer2, 1024);
-        printf("%s\n", buffer2);
-    }
+  address.sin_family = AF_INET;
+  address.sin_addr.s_addr = INADDR_ANY;
+  address.sin_port = htons( PORT );
+    
+  if (bind(server_fd, (struct sockaddr *)&address, sizeof(address))<0) {
+    perror("bind failed");
+    exit(EXIT_FAILURE);
+  }
 
-    if(strcmp(buffer, "register")==0){
-        valread = read( new_socket , buffer2, 1024);
-        // printf("%s\n", buffer2);
+  if (listen(server_fd, 3) < 0) {
+    perror("listen");
+    exit(EXIT_FAILURE);
+  }
 
-        valread2 = read( new_socket , buffer3, 1024);
-        // printf("%s\n", buffer3);
+  pthread_t threads[100]; //deklarasi array of thread untuk menghandle banyak pemain
+  for (int i = 0; i < 100; i++)
+  {
+    int *new_val = &i;
+    pthread_create(&threads[i], NULL, createServer,  (void *)new_val); //menjalankan fungsi untuk menghandle pemain
+  }
+  
+  for (int i = 0; i < 100; i++)  
+    pthread_join(threads[i], NULL); 
 
-        fputs(buffer2, file_ptr);
-        fputs(buffer3, file_ptr);
-
-        fclose(file_ptr);
-    }
-    }
-    return 0;
+  return 0;
 }

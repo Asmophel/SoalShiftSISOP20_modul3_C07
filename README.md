@@ -112,7 +112,6 @@ rate mereka, baru setelah itu di random dengan peluang
 untuk nantinya diberikan ke soal2_traizone.
 
 ## Soal 2
-### soal
 Qiqi adalah sahabat MamMam dan Kaka. Qiqi , Kaka dan MamMam sangat senang
 bermain “Rainbow six” bersama-sama , akan tetapi MamMam sangat Toxic ia selalu
 melakukan Team killing kepada Qiqi di setiap permainannya. Karena Qiqi orang yang
@@ -1063,7 +1062,7 @@ int main()
         return 1; 
     } 
    
-    p = fork(); 
+    pp = fork(); 
   
     if (pp < 0) 
     { 
@@ -1083,7 +1082,7 @@ int main()
     else
     { 
         dup2(p[1], 1);
-		close(p[0]);]
+		close(p[0]);
 	  	execvp("ls", msg1); 
     }  
 }  

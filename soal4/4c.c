@@ -16,7 +16,7 @@ int main()
         return 1; 
     } 
    
-    p = fork(); 
+    pp = fork(); 
   
     if (pp < 0) 
     { 
@@ -36,7 +36,7 @@ int main()
     else
     { 
         dup2(p[1], 1);
-		close(p[0]);]
+		close(p[0]);
 	  	execvp("ls", msg1); 
     }  
 }  

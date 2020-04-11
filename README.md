@@ -370,15 +370,23 @@ directory ketika program kategori tersebut dijalankan.
 
 ● Semisal program dijalankan:
 # File kategori terletak di /home/izone/kategori
+
 $ ./kategori -f path/to/file1.jpg path/to/file2.c path/to/file3.zip
+
 #Hasilnya adalah sebagai berikut
+
 /home/izone
 
 |-jpg
+
 |--file1.jpg
+
 |-c
+
 |--file2.c
+
 |-zip
+
 |--file3.zi
 
 ● Pada opsi -f tersebut, user bisa menambahkan argumen file yang bisa
